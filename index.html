@@ -1,0 +1,1212 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Sitzplan-Generator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: Werkzeugleiste links, rechts ein großzügiger Klassenraum mit freier Fläche um die Tische und der Tafel unten; auf dem Handy untereinander */
+:root {
+  --bg: #F1F3EF;
+  --panel: #FFFFFF;
+  --field: #F6F8F4;
+  --ink: #17211D;
+  --muted: #55625C;
+  --line: #D3DBD5;
+  --accent: #B8420F;
+  --on-accent: #FFFFFF;
+  --board: #27423A;
+  --on-board: #E8F0EB;
+  --floor: #E7EBE4;
+  --dot: #C6CFC7;
+  --desk: #EADBBA;
+  --desk-edge: #C6B185;
+  --seat: #FBF6E8;
+  --desk-ink: #2A2418;
+  --desk-muted: #6B5E41;
+  --warn: #9A3412;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111815; --panel: #18211D; --field: #111815; --ink: #E6EEE9; --muted: #9AAAA2; --line: #2B3832;
+    --accent: #F08A4B; --on-accent: #1A0F07; --board: #2F5246; --on-board: #E8F0EB; --floor: #151D19; --dot: #26332D;
+    --desk: #4A4230; --desk-edge: #6B6044; --seat: #2E2A1D; --desk-ink: #F3EBD6; --desk-muted: #CBBE9A; --warn: #F4A26B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111815; --panel: #18211D; --field: #111815; --ink: #E6EEE9; --muted: #9AAAA2; --line: #2B3832;
+  --accent: #F08A4B; --on-accent: #1A0F07; --board: #2F5246; --on-board: #E8F0EB; --floor: #151D19; --dot: #26332D;
+  --desk: #4A4230; --desk-edge: #6B6044; --seat: #2E2A1D; --desk-ink: #F3EBD6; --desk-muted: #CBBE9A; --warn: #F4A26B;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-block: 22px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header h1 { margin: 0; font-size: clamp(22px, 3.2vw, 30px); font-weight: 700; letter-spacing: -0.015em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+
+.app { display: grid; grid-template-columns: minmax(270px, 310px) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.group { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.group h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.row > * { min-width: 0; }
+
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; flex: 1 1 110px; }
+input[type="number"], input[type="text"], select, textarea.list {
+  width: 100%;
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+textarea.list { min-height: 210px; resize: vertical; line-height: 1.5; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  text-align: center;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); width: 100%; padding: 12px 14px; font-size: 15px; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.small { padding: 6px 10px; font-size: 13px; font-weight: 500; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btns .btn { flex: 1 1 auto; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fileinput:focus-visible + .btn { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.count { font-family: var(--font-mono); font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.count.warn { color: var(--warn); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+
+.dropped { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.dropped summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.dropped ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.dropped li button {
+  width: 100%; text-align: left; font: 500 12px/1.35 var(--font-mono); color: var(--muted);
+  background: var(--field); border: 1px solid transparent; border-radius: 6px; padding: 4px 7px; cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.dropped li button:hover { border-color: var(--line); color: var(--ink); }
+.dropped li button::after { content: "  + übernehmen"; color: var(--accent); font-family: var(--font-ui); font-weight: 600; }
+
+.stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.msg { min-height: 22px; font-size: 14px; color: var(--muted); }
+.msg.warn { color: var(--warn); font-weight: 600; }
+.msg.ok { color: var(--ink); }
+.scroller { overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--floor); max-width: 100%; }
+.room {
+  position: relative;
+  min-width: 100%;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+  background-position: 4px 4px;
+}
+.board {
+  position: absolute;
+  left: 24px; right: 24px; bottom: 14px; height: 34px;
+  background: var(--board);
+  color: var(--on-board);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25);
+  user-select: none;
+}
+
+.table {
+  position: absolute;
+  width: 190px; height: 94px;
+  background: var(--desk);
+  border: 1px solid var(--desk-edge);
+  border-radius: 10px;
+  padding: 5px 6px 4px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06), 0 5px 10px -7px rgba(0,0,0,0.35);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.table.vert { width: 98px; height: 180px; }
+.table.vert .seats { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; height: auto; flex: 1; }
+.table.vert .thead { justify-content: center; }
+.table.vert .thead { gap: 0; }
+.table.vert .tlabel { font-size: 10px; letter-spacing: 0; gap: 3px; white-space: nowrap; }
+.table.vert .swap { width: 17px; }
+.table.vert .tlabel .grip { display: none; }
+.table.dragging { cursor: grabbing; z-index: 10; box-shadow: 0 14px 24px -10px rgba(0,0,0,0.5); border-color: var(--accent); }
+.thead { height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.tlabel { display: flex; align-items: center; gap: 6px; color: var(--desk-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; pointer-events: none; font-variant-numeric: tabular-nums; }
+.grip { width: 14px; height: 8px; color: var(--desk-muted); background: radial-gradient(currentColor 1.1px, transparent 1.4px) 0 0 / 5px 4px; opacity: 0.8; }
+.seats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; height: 60px; }
+.seat {
+  position: relative; min-width: 0;
+  background: var(--seat); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 3px 4px; overflow: hidden; cursor: text;
+}
+.seat:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
+.nm {
+  display: inline-block; max-width: 100%; min-width: 2ch;
+  font: 700 15px/18px var(--font-ui);
+  color: var(--desk-ink); text-align: center;
+  white-space: pre-wrap; overflow-wrap: break-word; hyphens: manual;
+  outline: none; user-select: text; -webkit-user-select: text;
+}
+.nm:empty::before { content: "frei"; color: var(--desk-muted); font-weight: 400; opacity: 0.8; }
+.nm:focus:empty::before { content: ""; }
+.swap {
+  width: 26px; height: 20px; padding: 0;
+  border: 0; border-radius: 4px;
+  background: transparent; color: var(--desk-muted);
+  font: 700 13px/20px var(--font-ui);
+  cursor: pointer; opacity: 0.55;
+}
+.table:hover .swap, .table:focus-within .swap, .room.swapping .swap { opacity: 1; }
+.swap:hover { background: var(--seat); }
+.swap.sel { background: var(--accent); color: var(--on-accent); opacity: 1; }
+
+.sign { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; font-size: 14px; padding: 6px 4px 0; }
+.sign strong { font-variant-numeric: tabular-nums; }
+.paraphe { display: flex; align-items: flex-end; gap: 8px; }
+.paraphe::after { content: ""; display: block; width: 150px; height: 26px; border-bottom: 1px solid var(--ink); }
+
+#printArea { display: none; }
+@media print {
+  body { background: #fff !important; padding: 0 !important; }
+  body.printing > *:not(#printArea) { display: none !important; }
+  body.printing #printArea { display: flex !important; align-items: flex-start; justify-content: center; width: 100%; }
+  body.printing #printArea img { display: block; width: 285mm; height: 198mm; object-fit: contain; }
+  body.printing.portrait #printArea img { width: 198mm; height: 285mm; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .table { transition: box-shadow 0.12s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Sitzplan-Generator</h1>
+    <p>Klassenliste einlesen, zufällig auf Zweiertische verteilen und die Tische frei im Raum verschieben. Auf dem Plan steht „Vorname N.“, die Namen wandern mit dem Tisch.</p>
+  </header>
+
+  <div class="app">
+    <aside class="panel" aria-label="Werkzeuge">
+      <section class="group">
+        <h2>Namensliste</h2>
+        <div class="btns">
+          <input class="fileinput visually-hidden" type="file" id="file" accept=".pdf,.txt,.csv,text/plain,text/csv,application/pdf">
+          <label class="btn small" for="file" style="cursor:pointer">PDF oder Textdatei laden</label>
+          <button class="btn small" type="button" id="clearList">Liste leeren</button>
+        </div>
+        <textarea class="list" id="names" spellcheck="false" aria-label="Namen, einer pro Zeile"></textarea>
+        <div class="count" id="count" aria-live="polite"></div>
+        <details class="dropped" id="dropped" hidden>
+          <summary id="droppedSum"></summary>
+          <ul id="droppedList"></ul>
+        </details>
+        <p class="note">Beim Laden oder Einfügen einer Liste bleiben nur die Namen übrig. Nummern, Klassen, Geburtsdaten, Schulkopf, Adressen und Seitenzahlen fallen weg.</p>
+        <p class="note" id="exampleNote">Das sind Beispielnamen. Mit „Liste leeren“ oder einer Datei ersetzen.</p>
+      </section>
+
+      <section class="group">
+        <h2>Namen auf dem Plan</h2>
+        <div class="row">
+          <label class="f" for="order">In der Liste steht zuerst
+            <select id="order">
+              <option value="last">der Nachname</option>
+              <option value="first">der Vorname</option>
+            </select>
+          </label>
+          <label class="f" for="fmt">Anzeige
+            <select id="fmt">
+              <option value="short">Max M.</option>
+              <option value="full">Max Müller</option>
+              <option value="first">Max</option>
+            </select>
+          </label>
+        </div>
+        <p class="note">Gibt es einen Vornamen doppelt, kommen weitere Buchstaben dazu, etwa „Jonas Be.“ und „Jonas Br.“.</p>
+      </section>
+
+      <section class="group">
+        <h2>Raum</h2>
+        <div class="btns">
+          <input class="fileinput visually-hidden" type="file" id="photo" accept="image/*" multiple>
+          <label class="btn small" for="photo" style="cursor:pointer" id="photoBtn">Tische vom Foto übernehmen</label>
+        </div>
+        <p class="note">Ein bis drei Fotos vom leeren Raum, z. B. eins von hinten und eins von der Tafel aus, aus Stehhöhe oder höher. Mehrere Fotos auf einmal auswählen erhöht die Genauigkeit. Keine Personen fotografieren.</p>
+        <div class="row">
+          <label class="f" for="cols">Tische nebeneinander
+            <input type="number" id="cols" min="1" max="8" inputmode="numeric">
+          </label>
+          <label class="f" for="rows">Tischreihen
+            <input type="number" id="rows" min="1" max="8" inputmode="numeric">
+          </label>
+        </div>
+        <label class="f" for="title">Bezeichnung für den Ausdruck
+          <input type="text" id="title" placeholder="z. B. 6D, Raum 214" maxlength="60">
+        </label>
+        <label class="check" for="snap"><input type="checkbox" id="snap"> Tische am Raster einrasten</label>
+      </section>
+
+      <section class="group">
+        <button class="btn primary" type="button" id="shuffle">Zufällig verteilen</button>
+        <div class="btns">
+          <button class="btn" type="button" id="arrange">Tische wieder ordnen</button>
+          <button class="btn" type="button" id="clearSeats">Tische leeren</button>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Sichern</h2>
+        <div class="btns">
+          <button class="btn small" type="button" id="savePdf" hidden>Als PDF</button>
+          <button class="btn small" type="button" id="savePng" hidden>Als Bild</button>
+          <button class="btn small" type="button" id="printBtn" hidden>Drucken</button>
+          <button class="btn small" type="button" id="copyTxt">Als Text kopieren</button>
+        </div>
+        <p class="note">Der Plan bleibt in diesem Browser gespeichert. PDF, Bild und Druck füllen genau eine A4-Seite mit großer, gut lesbarer Schrift.</p>
+      </section>
+    </aside>
+
+    <section class="stage" aria-label="Sitzplan">
+      <div class="msg" id="msg" role="status"></div>
+      <div class="scroller" id="scroller">
+        <div class="room" id="room">
+          <div class="board">Tafel</div>
+        </div>
+      </div>
+      <div class="sign">
+        <span>Datum: <strong id="today"></strong></span>
+        <span class="paraphe">Paraphe:</span>
+      </div>
+      <p class="note">Tisch an der Kopfzeile oder am Rand greifen und ziehen. Zieht man über den Rand hinaus, wird der Raum größer. Namen direkt anklicken, ändern oder löschen. Mit ⇄ an zwei Plätzen tauschen zwei Personen.</p>
+    </section>
+  </div>
+</div>
+
+<div id="printArea" aria-hidden="true"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var VW = 98, VH = 180, W = 190, H = 94, PX = 214, PY = 126, MX = 110, TOP = 70, GAPB = 90, BOT = 68, MINY = 8;
+  var KEY = 'sitzplan-generator-v3', OLDKEY = 'sitzplan-generator-v2';
+  var TODAY = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  $('today').textContent = TODAY;
+  var EXAMPLE = ['Kaya Amira', 'Becker Jonas', 'Schulz Lena', 'Yılmaz Mehmet', 'Wagner Sophie', 'Meyer Elias', 'Hoffmann Nora',
+    'Peters Luca', 'Demir Aylin', 'Richter Paul', 'Thomas Mia', 'Çelik Emre', 'Fischer Hanna', 'Lange Finn', 'Arslan Selin',
+    'Graf Noah', 'Vogel Leonie', 'Otto Tim', 'Erdem Zeynep', 'Jansen Ben', 'Neumann Clara', 'Santoro Dario', 'Zimmermann Emma',
+    'Koç Yusuf', 'Brandt Jonas', 'Hartmann Max', 'Roth Lilly', 'Toprak Omar'];
+
+  var S = { cols: 4, rows: 4, title: '', snap: true, example: true, order: 'last', fmt: 'short', tables: [] };
+  var nameEls = [], sel = null, drag = null, saveT = null, dl = null, dmap = {};
+  var room = $('room'), scroller = $('scroller'), namesEl = $('names'), countEl = $('count'), msgEl = $('msg');
+
+  /* ---------- Namen säubern ---------- */
+  var JUNK = new Set(('schule gesamtschule gymnasium realschule hauptschule grundschule sekundarschule berufskolleg förderschule ' +
+    'gemeinschaftsschule oberschule stadtteilschule schulzentrum schulleitung schulleiter schulleiterin sekretariat klasse klassen ' +
+    'klassenliste klassenlehrer klassenlehrerin klassenleitung klassenleiter klassenleiterin tutor tutorin stufe jahrgang jahrgangsstufe ' +
+    'kurs kursliste kurslehrer kurslehrerin fach raum schuljahr halbjahr schülerliste schülerinnen schüler schülerin namensliste ' +
+    'teilnehmerliste liste sitzplan seite stand datum druck druckdatum gedruckt erstellt ausgabe anzahl summe gesamt insgesamt ' +
+    'name namen vorname vornamen nachname familienname rufname geburtsdatum geb geboren geschlecht konfession religion ' +
+    'staatsangehörigkeit bemerkung bemerkungen unterschrift telefon tel fax mail email e-mail internet www straße strasse str ' +
+    'postfach herr frau hr fr lehrer lehrerin lehrkraft nr lfd mädchen jungen stadt landkreis kreis').split(' '));
+  var CODES = new Set(('m w d f x div divers männlich weiblich männl weibl ev evg evang evangelisch rk kath katholisch isl islam ' +
+    'islamisch ob o.b ohne orth orthodox jüd sonst sonstige ja nein q1 q2 ef pp er kr eg lk gk neu wdh abg').split(' '));
+  var PART = new Set('von vom van de der den del della di da du dos das zu zur ten ter al el le la bin ibn'.split(' '));
+  function isPart(w) { return PART.has(String(w).toLowerCase()); }
+
+  function junkLine(l) {
+    if (/[:@]|https?:\/\/|www\./i.test(l)) return true;
+    if (/^\s*(seite\s*)?\d+\s*(\/|von|of)\s*\d+\s*$/i.test(l)) return true;
+    if (/\b(19|20)\d{2}\s*\/\s*(\d{2}|\d{4})\b/.test(l)) return true;
+    if (/\b0\d{2,5}\s?[\/-]\s?\d{3,}|\+49|\b0\d{3,5}\s\d{4,}/.test(l)) return true;
+    if (/^\s*(D-)?\d{5}\s+\p{L}[\p{L}-]*(\s*\/\s*\p{L}+)?\s*$/u.test(l)) return true;
+    if (/\p{L}(str\.|straße|strasse)(\s|,|$)/iu.test(l)) return true;
+    if (/(^|\s)(straße|strasse|str\.|weg|allee|platz|ring|gasse|damm|ufer)\s+\d/iu.test(l)) return true;
+    var toks = l.toLowerCase().split(/[^\p{L}\-]+/u);
+    for (var i = 0; i < toks.length; i++) if (JUNK.has(toks[i].replace(/^-+|-+$/g, ''))) return true;
+    return false;
+  }
+  function fixCase(tk) {
+    if (tk.length > 1 && tk === tk.toLocaleUpperCase('de') && tk !== tk.toLocaleLowerCase('de')) {
+      return tk.split('-').map(function (p) {
+        return p.charAt(0) + p.slice(1).toLocaleLowerCase('de');
+      }).join('-');
+    }
+    return tk;
+  }
+  /* Aus einem Zeilenstück wird ein Name ("Müller Max" oder "Müller, Max") oder nichts */
+  function cleanName(seg) {
+    seg = seg.replace(/,/g, ' , ').replace(/\s+/g, ' ').trim();
+    if (!seg) return '';
+    var out = [];
+    seg.split(' ').forEach(function (tk) {
+      if (tk === ',') { out.push(','); return; }
+      tk = tk.replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}.]+$/u, '');
+      if (!tk) return;
+      var low = tk.toLowerCase();
+      if (CODES.has(low) || CODES.has(low.replace(/\.+$/, ''))) return;
+      if (/\d/.test(tk) || tk.length > 28) return;
+      if (!/^\p{L}[\p{L}'’\-]*\.?$/u.test(tk)) return;
+      if (tk.length === 1) return;
+      if (tk.length > 4 && /\.$/.test(tk)) tk = tk.slice(0, -1);
+      out.push(fixCase(tk));
+    });
+    var words = out.filter(function (x) { return x !== ','; });
+    if (!words.length || words.length > 5) return '';
+    if (!words.every(function (w) { return isPart(w) || /^\p{Lu}/u.test(w); })) return '';
+    if (words.every(isPart)) return '';
+    var ci = out.indexOf(',');
+    if (ci > 0) {
+      var a = out.slice(0, ci).filter(function (x) { return x !== ','; });
+      var b = out.slice(ci + 1).filter(function (x) { return x !== ','; });
+      if (a.length && b.length) return a.join(' ') + ', ' + b.join(' ');
+    }
+    return words.join(' ');
+  }
+  function importText(text) {
+    var names = [], dropped = [], title = '';
+    var mt = text.match(/\bKlasse\s*:?\s*(\d{1,2}\s?[A-Za-z]{1,2})\b/i);
+    if (mt) title = mt[1].replace(/\s/g, '').toUpperCase();
+    text.split(/\r?\n/).forEach(function (raw) {
+      var line = raw.replace(/[ \u00a0]+/g, ' ').replace(/\t+/g, '\t').trim();
+      if (!line) return;
+      if (junkLine(line)) { dropped.push(line); return; }
+      var l = raw.replace(/\b\d{1,2}\.\d{1,2}\.(\d{4}|\d{2})?/g, ' ')
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+        .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ');
+      /* Spalten (Tabulator, Semikolon, große Lücken im PDF) getrennt säubern */
+      var parts = [];
+      l.split(/\t|;|\|/).forEach(function (col) {
+        col.split(/(?:^|\s)\d{1,3}[.)]?(?=\s|$)/).forEach(function (seg) {
+          var n = cleanName(seg);
+          if (n) parts.push(n);
+        });
+      });
+      /* Nachname und Vorname in getrennten Spalten wieder zusammenführen */
+      var wc = function (x) { return x.split(' ').length; };
+      for (var i = 0; i < parts.length; i++) {
+        var a = parts[i], b = parts[i + 1];
+        if (b && a.indexOf(',') < 0 && b.indexOf(',') < 0 && (wc(a) === 1 || wc(b) === 1)) {
+          names.push(S.order === 'first' ? b + ', ' + a : a + ', ' + b); i++;
+        } else names.push(a);
+      }
+      if (!parts.length) dropped.push(line);
+    });
+    var u = uniq(names);
+    return { names: u, dropped: dropped, title: title, dups: names.length - u.length };
+  }
+  function uniq(arr) {
+    var seen = new Set();
+    return arr.filter(function (n) { var k = n.toLocaleLowerCase('de').replace(/[\s,]+/g, ' ').trim(); if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+  function listNames() {
+    return uniq(namesEl.value.split(/\r?\n/).map(function (s) { return s.replace(/\s+/g, ' ').trim(); }).filter(Boolean));
+  }
+  /* Doppelte Zeilen (z. B. Liste zweimal eingefügt) aus dem Feld entfernen; gibt die Anzahl zurück */
+  function dedupeList() {
+    var all = namesEl.value.split(/\r?\n/).map(function (s) { return s.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+    var u = uniq(all);
+    if (u.length < all.length) namesEl.value = u.join('\n');
+    return all.length - u.length;
+  }
+
+  /* ---------- Anzeige "Max M." ---------- */
+  function parts(raw) {
+    var s = raw.replace(/\s+/g, ' ').trim();
+    var ci = s.indexOf(',');
+    if (ci > 0) {
+      var last = s.slice(0, ci).trim().split(' ').filter(Boolean);
+      var first = s.slice(ci + 1).replace(/,/g, ' ').trim().split(' ').filter(Boolean);
+      if (first.length) return { first: first, last: last };
+      s = s.replace(/,/g, ' ').trim();
+    }
+    var t = s.split(' ').filter(Boolean);
+    if (t.length > 1 && /^\p{L}{1,3}\.$/u.test(t[t.length - 1])) return { first: t.slice(0, -1), last: [], init: t[t.length - 1] };
+    if (t.length < 2) return { first: t, last: [] };
+    if (S.order === 'last') {
+      var i = 0;
+      while (i < t.length - 2 && isPart(t[i])) i++;
+      return { first: t.slice(i + 1), last: t.slice(0, i + 1) };
+    }
+    var j = t.length - 1;
+    while (j > 1 && isPart(t[j - 1])) j--;
+    return { first: t.slice(0, j), last: t.slice(j) };
+  }
+  function core(p) {
+    var c = p.last.filter(function (w) { return !isPart(w); });
+    return (c.length ? c : p.last).join(' ');
+  }
+  function buildMap(list) {
+    var ps = list.map(function (r) { return { r: r, p: parts(r) }; });
+    var groups = {};
+    ps.forEach(function (o) { var k = (o.p.first[0] || '').toLowerCase(); (groups[k] = groups[k] || []).push(o); });
+    var map = {};
+    ps.forEach(function (o) {
+      var p = o.p, f = p.first.join(' '), f1 = p.first[0] || '';
+      if (S.fmt === 'full') { map[o.r] = (f + ' ' + (p.init || p.last.join(' '))).trim(); return; }
+      var grp = groups[f1.toLowerCase()];
+      if (S.fmt === 'first' && grp.length < 2) { map[o.r] = f1; return; }
+      if (p.init) { map[o.r] = f1 + ' ' + p.init; return; }
+      var c = core(p);
+      if (!c) { map[o.r] = f1; return; }
+      var cl = c.toLowerCase(), k = 1;
+      var others = grp.filter(function (x) { return x !== o; }).map(function (x) { return core(x.p).toLowerCase(); });
+      while (k < c.length && others.some(function (x) { return x.slice(0, k) === cl.slice(0, k); })) k++;
+      var pre = c.slice(0, k).replace(/[\s-]+$/, '');
+      map[o.r] = f1 + ' ' + pre + (k < c.length ? '.' : '');
+    });
+    return map;
+  }
+  function refreshMap() { dmap = buildMap(listNames()); }
+  function disp(seat) {
+    if (!seat) return '';
+    if (seat.t != null) return seat.t;
+    if (!seat.r) return '';
+    return dmap[seat.r] || buildMap([seat.r])[seat.r] || seat.r;
+  }
+
+  /* ---------- Raum ---------- */
+  function tw(t) { return t && t.v ? VW : W; }
+  function th(t) { return t && t.v ? VH : H; }
+  function viewW() { return Math.max(320, scroller.clientWidth || 800); }
+  function baseSize(cols, rows) {
+    var gw = (cols - 1) * PX + W, gh = (rows - 1) * PY + H;
+    return { w: Math.max(viewW(), gw + 2 * MX), h: TOP + gh + GAPB + BOT, gw: gw };
+  }
+  function mkTables(cols, rows) {
+    var b = baseSize(cols, rows), ox = Math.round((b.w - b.gw) / 2), a = [];
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      a.push({ x: ox + c * PX, y: TOP + (rows - 1 - r) * PY, seats: [{ r: '', t: null }, { r: '', t: null }] });
+    }
+    return a;
+  }
+  /* Tische aus Fotoerkennung.
+     Eingabe je Tisch: reihe (1 = an der Tafel), x 0..1 von links nach rechts (Blick von der Tafel in den Raum),
+     y 0..1 Tiefe (nur Hilfswert), quer (true = lange Seite parallel zur Tafel, der Normalfall).
+     Reihen bekommen gleiche Abstände, damit die Perspektive des Fotos den Plan nicht verzerrt. */
+  function tablesFromPhoto(list) {
+    var pts = list.filter(function (d) { return d && isFinite(d.x); }).map(function (d) {
+      return { x: Math.max(0, Math.min(1, +d.x)), y: isFinite(d.y) ? Math.max(0, Math.min(1, +d.y)) : 0.5,
+        r: Math.max(1, Math.round(+d.reihe) || 0) || 0, v: d.quer === false };
+    });
+    if (!pts.length) return null;
+    if (pts.some(function (p) { return !p.r; })) {
+      var ys = pts.map(function (p) { return p.y; }).sort(function (a, b) { return a - b; }), lv = 1, prev = ys[0], map = {};
+      ys.forEach(function (y) { if (y - prev > 0.07) lv++; prev = y; map[y] = lv; });
+      pts.forEach(function (p) { if (!p.r) p.r = map[p.y]; });
+    }
+    var rows = {};
+    pts.forEach(function (p) { (rows[p.r] = rows[p.r] || []).push(p); });
+    var keys = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; });
+    /* Horizontaler Maßstab: kleinster Abstand zweier Tische in einer Reihe = Tischbreite plus Fuge */
+    var dx = Infinity;
+    keys.forEach(function (k) {
+      var r = rows[k].sort(function (a, b) { return a.x - b.x; });
+      for (var i = 1; i < r.length; i++) {
+        var need = (tw(r[i - 1]) + tw(r[i])) / 2 + 24;
+        var d = r[i].x - r[i - 1].x;
+        if (d > 0.01) dx = Math.min(dx, d / need);
+      }
+    });
+    var sx = isFinite(dx) ? 1 / dx : 900;
+    sx = Math.max(500, Math.min(sx, 2400));
+    var a = [], y = TOP, rowsBack = keys.slice().reverse();
+    rowsBack.forEach(function (k) {
+      var r = rows[k], rh = Math.max.apply(null, r.map(function (p) { return p.v ? VH : H; }));
+      var lastRight = -Infinity;
+      r.sort(function (p, q) { return p.x - q.x; }).forEach(function (p) {
+        var w = p.v ? VW : W, cx = p.x * sx, left = Math.round(cx - w / 2);
+        if (left < lastRight + 12) left = lastRight + 12;
+        lastRight = left + w;
+        a.push({ x: left, y: Math.round(y + (rh - (p.v ? VH : H)) / 2), v: p.v, seats: [{ r: '', t: null }, { r: '', t: null }] });
+      });
+      y += rh + (PY - H);
+    });
+    var minx = Math.min.apply(null, a.map(function (t) { return t.x; }));
+    var w0 = Math.max.apply(null, a.map(function (t) { return t.x + tw(t); })) - minx;
+    var off = Math.max(MX, Math.round((viewW() - w0) / 2)) - minx;
+    a.forEach(function (t) { t.x += off; });
+    /* Nummerierung wie gewohnt: vorne links beginnen */
+    a.sort(function (p, q) { return (q.y - p.y) || (p.x - q.x); });
+    return a;
+  }
+  function fitRoom(shrink) {
+    var b = baseSize(S.cols, S.rows), mr = 0, mb = 0;
+    S.tables.forEach(function (t) { mr = Math.max(mr, t.x + tw(t)); mb = Math.max(mb, t.y + th(t)); });
+    var w = Math.max(b.w, mr + 80), h = Math.max(b.h, mb + 40 + BOT);
+    if (!shrink) { w = Math.max(w, room.offsetWidth); h = Math.max(h, room.offsetHeight); }
+    room.style.width = w + 'px'; room.style.height = h + 'px';
+  }
+
+  function rnd(n) {
+    var lim = Math.floor(4294967296 / n) * n, a = new Uint32Array(1);
+    do { crypto.getRandomValues(a); } while (a[0] >= lim);
+    return a[0] % n;
+  }
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = rnd(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+
+  function flash(text, kind) { msgEl.textContent = text; msgEl.className = 'msg ' + (kind || ''); }
+
+  function updateCount() {
+    var n = listNames().length, cap = S.tables.length * 2, over = n > cap;
+    countEl.className = 'count' + (over ? ' warn' : '');
+    countEl.innerHTML = '';
+    var a = document.createElement('span'); a.textContent = n + ' Namen · ' + cap + ' Plätze';
+    countEl.appendChild(a);
+    if (over) { var b = document.createElement('span'); b.textContent = (n - cap) + ' zu viel'; countEl.appendChild(b); }
+    $('exampleNote').hidden = !S.example;
+  }
+
+  function save() {
+    clearTimeout(saveT);
+    saveT = setTimeout(function () {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({
+          cols: S.cols, rows: S.rows, title: S.title, snap: S.snap, example: S.example, order: S.order, fmt: S.fmt, home: S.home || null,
+          tables: S.tables, names: namesEl.value
+        }));
+      } catch (e) {}
+    }, 250);
+  }
+
+  function paintSeat(ti, si) {
+    var el = nameEls[ti] && nameEls[ti][si];
+    if (!el || document.activeElement === el) return;
+    var v = disp(S.tables[ti].seats[si]);
+    el.textContent = v;
+    el.classList.toggle('empty', !v);
+  }
+  function paintAll() { S.tables.forEach(function (t, ti) { paintSeat(ti, 0); paintSeat(ti, 1); }); }
+
+  function caretEnd(el) {
+    try {
+      var rg = document.createRange(); rg.selectNodeContents(el); rg.collapse(false);
+      var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+    } catch (e) {}
+  }
+  function render() {
+    refreshMap();
+    Array.prototype.slice.call(room.querySelectorAll('.table')).forEach(function (n) { n.remove(); });
+    nameEls = [];
+    S.tables.forEach(function (t, ti) {
+      var el = document.createElement('div');
+      el.className = 'table' + (t.v ? ' vert' : ''); el.dataset.i = ti;
+      el.style.left = t.x + 'px'; el.style.top = t.y + 'px';
+      var head = document.createElement('div'); head.className = 'thead';
+      var lab = document.createElement('span'); lab.className = 'tlabel';
+      var grip = document.createElement('span'); grip.className = 'grip'; grip.setAttribute('aria-hidden', 'true');
+      lab.appendChild(grip); lab.appendChild(document.createTextNode('Tisch ' + (ti + 1)));
+      var seats = document.createElement('div'); seats.className = 'seats';
+      nameEls[ti] = [];
+      var sws = [0, 1].map(function (si) {
+        var sw = document.createElement('button');
+        sw.type = 'button'; sw.className = 'swap'; sw.textContent = '⇄';
+        sw.title = si ? 'Rechten Platz tauschen' : 'Linken Platz tauschen';
+        sw.setAttribute('aria-label', 'Platz tauschen: Tisch ' + (ti + 1) + (si ? ', rechts' : ', links'));
+        sw.addEventListener('click', function () { swapClick(ti, si); });
+        return sw;
+      });
+      head.appendChild(sws[0]); head.appendChild(lab); head.appendChild(sws[1]);
+      [0, 1].forEach(function (si) {
+        var seat = document.createElement('div'); seat.className = 'seat';
+        var nm = document.createElement('span');
+        nm.className = 'nm'; nm.dataset.t = ti; nm.dataset.s = si; nm.spellcheck = false;
+        try { nm.contentEditable = 'plaintext-only'; } catch (e) {}
+        if (nm.contentEditable !== 'plaintext-only') nm.contentEditable = 'true';
+        nm.setAttribute('role', 'textbox');
+        nm.setAttribute('aria-label', 'Tisch ' + (ti + 1) + (si ? ', rechter Platz' : ', linker Platz'));
+        nm.addEventListener('input', function () {
+          var v = nm.textContent.replace(/\s+/g, ' ').trim(), st = S.tables[ti].seats[si];
+          if (!v) { st.r = ''; st.t = null; } else { st.t = v; }
+          save();
+        });
+        nm.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); nm.blur(); } });
+        nm.addEventListener('blur', function () { paintSeat(ti, si); });
+        nm.addEventListener('paste', function (e) {
+          var cd = e.clipboardData; if (!cd) return;
+          e.preventDefault();
+          document.execCommand('insertText', false, (cd.getData('text') || '').replace(/\s+/g, ' ').trim());
+        });
+        seat.addEventListener('mousedown', function (e) {
+          if (e.target === seat) { e.preventDefault(); nm.focus(); caretEnd(nm); }
+        });
+        seat.appendChild(nm); seats.appendChild(seat);
+        nameEls[ti][si] = nm;
+      });
+      el.appendChild(head); el.appendChild(seats); room.appendChild(el);
+    });
+    paintAll();
+    fitRoom(true);
+    room.classList.toggle('swapping', !!sel);
+    updateCount();
+  }
+
+  function swapClick(ti, si) {
+    if (!sel) {
+      sel = { t: ti, s: si };
+      room.querySelectorAll('.swap')[ti * 2 + si].classList.add('sel');
+      room.classList.add('swapping');
+      flash('Jetzt den zweiten Platz mit ⇄ wählen.', '');
+      return;
+    }
+    var a = sel; sel = null;
+    room.querySelectorAll('.swap.sel').forEach(function (b) { b.classList.remove('sel'); });
+    room.classList.remove('swapping');
+    if (a.t === ti && a.s === si) { flash('', ''); return; }
+    var x = S.tables[a.t].seats[a.s];
+    S.tables[a.t].seats[a.s] = S.tables[ti].seats[si];
+    S.tables[ti].seats[si] = x;
+    paintSeat(a.t, a.s); paintSeat(ti, si);
+    flash('Plätze getauscht.', 'ok'); save();
+  }
+
+  function distribute(quiet) {
+    var names = listNames(), cap = S.tables.length * 2;
+    if (!names.length) { flash('Die Namensliste ist leer.', 'warn'); return false; }
+    if (names.length > cap) {
+      flash(names.length + ' Namen, aber nur ' + cap + ' Plätze. Bitte mehr Tische einstellen.', 'warn');
+      return false;
+    }
+    var mixed = shuffle(names);
+    S.tables.forEach(function (t, i) {
+      t.seats = [{ r: mixed[2 * i] || '', t: null }, { r: mixed[2 * i + 1] || '', t: null }];
+    });
+    sel = null; render(); save();
+    if (!quiet) flash(names.length + ' Namen zufällig auf ' + Math.ceil(names.length / 2) + ' Tische verteilt.', 'ok');
+    return true;
+  }
+
+  function arrange() {
+    if (S.home && S.home.length === S.tables.length) {
+      S.tables.forEach(function (t, i) { t.x = S.home[i].x; t.y = S.home[i].y; });
+      render(); save(); flash('Tische stehen wieder wie auf dem Foto.', 'ok'); return;
+    }
+    var g = mkTables(S.cols, S.rows);
+    S.tables.forEach(function (t, i) { t.x = g[i].x; t.y = g[i].y; });
+    render(); save(); flash('Tische stehen wieder im Raster.', 'ok');
+  }
+
+  /* ---------- Tische verschieben: überall greifbar, kurzes Tippen auf einen Namen öffnet die Bearbeitung ---------- */
+  room.addEventListener('pointerdown', function (e) {
+    var ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains('nm') && !ae.contains(e.target)) ae.blur();
+    if (e.button && e.button > 0) return;
+    var el = e.target.closest('.table');
+    if (!el || e.target.closest('.swap') || e.target.closest('.seat')) return;
+    var t = S.tables[+el.dataset.i];
+    drag = { el: el, t: t, sx: e.clientX, sy: e.clientY, ox: t.x, oy: t.y, sl: scroller.scrollLeft, st: scroller.scrollTop,
+      moved: false };
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  room.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.sx + (scroller.scrollLeft - drag.sl);
+    var dy = e.clientY - drag.sy + (scroller.scrollTop - drag.st);
+    if (!drag.moved) {
+      if (Math.abs(dx) + Math.abs(dy) < 5) return;
+      drag.moved = true; drag.el.classList.add('dragging');
+    }
+    var x = drag.ox + dx, y = drag.oy + dy;
+    if (S.snap) { x = Math.round(x / 10) * 10; y = Math.round(y / 10) * 10; }
+    x = Math.max(0, x); y = Math.max(MINY, y);
+    drag.t.x = x; drag.t.y = y;
+    drag.el.style.left = x + 'px'; drag.el.style.top = y + 'px';
+    fitRoom(false);
+    var r = scroller.getBoundingClientRect();
+    if (e.clientX > r.right - 36) scroller.scrollLeft += 14;
+    else if (e.clientX < r.left + 36) scroller.scrollLeft -= 14;
+  });
+  function endDrag(e) {
+    if (!drag) return;
+    var d = drag; drag = null;
+    d.el.classList.remove('dragging');
+    if (d.moved) { fitRoom(true); save(); }
+  }
+  room.addEventListener('pointerup', endDrag);
+  room.addEventListener('pointercancel', endDrag);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && sel) {
+      room.querySelectorAll('.swap.sel').forEach(function (b) { b.classList.remove('sel'); });
+      sel = null; room.classList.remove('swapping'); flash('', '');
+    }
+  });
+  var rzT = null;
+  window.addEventListener('resize', function () { clearTimeout(rzT); rzT = setTimeout(function () { fitRoom(true); }, 150); });
+
+  /* ---------- Dateien und eingefügte Listen ---------- */
+  async function pdfLines(file) {
+    var lib = window.pdfjsLib;
+    if (!lib) throw new Error('pdf');
+    lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+    var out = [];
+    for (var p = 1; p <= pdf.numPages; p++) {
+      var page = await pdf.getPage(p), tc = await page.getTextContent();
+      var items = tc.items.filter(function (i) { return i.str && i.str.trim(); })
+        .map(function (i) { return { s: i.str, x: i.transform[4], y: i.transform[5], w: i.width || 0, h: Math.abs(i.transform[3]) || 10 }; });
+      items.sort(function (a, b) { return (b.y - a.y) || (a.x - b.x); });
+      var cur = [], cy = null;
+      var flush = function () {
+        if (cur.length) {
+          cur.sort(function (a, b) { return a.x - b.x; });
+          var txt = '';
+          cur.forEach(function (i, k) {
+            if (k) { var pv = cur[k - 1]; txt += (i.x - (pv.x + pv.w) > Math.max(6, pv.h * 0.9)) ? '\t' : ' '; }
+            txt += i.s.trim();
+          });
+          out.push(txt);
+        }
+        cur = [];
+      };
+      items.forEach(function (i) {
+        if (cy !== null && Math.abs(i.y - cy) > 3) flush();
+        if (!cur.length) cy = i.y;
+        cur.push(i);
+      });
+      flush();
+    }
+    return out;
+  }
+
+  function showDropped(lines) {
+    var box = $('dropped'), ul = $('droppedList');
+    ul.innerHTML = '';
+    if (!lines.length) { box.hidden = true; return; }
+    lines.slice(0, 80).forEach(function (raw) {
+      var li = document.createElement('li'), b = document.createElement('button');
+      b.type = 'button'; b.textContent = raw;
+      b.setAttribute('aria-label', 'Zeile übernehmen: ' + raw);
+      b.addEventListener('click', function () {
+        var n = cleanName(raw.replace(/\b\d{1,2}\.\d{1,2}\.(\d{4}|\d{2})?/g, ' ').replace(/[\t;|]/g, ' ')) || raw.trim();
+        namesEl.value = namesEl.value.replace(/\s*$/, '') + (namesEl.value.trim() ? '\n' : '') + n;
+        li.remove();
+        var left = ul.children.length;
+        $('droppedSum').textContent = left + ' Zeilen übersprungen';
+        if (!left) box.hidden = true;
+        listChanged();
+        flash('„' + n + '“ steht jetzt in der Liste. Mit „Zufällig verteilen“ bekommt der Name einen Platz.', 'ok');
+      });
+      li.appendChild(b); ul.appendChild(li);
+    });
+    $('droppedSum').textContent = lines.length + ' Zeilen übersprungen';
+    box.hidden = false; box.open = false;
+  }
+
+  function applyImport(res, how) {
+    if (res.title && !S.title) { S.title = res.title; $('title').value = res.title; }
+    showDropped(res.dropped);
+  }
+
+  $('file').addEventListener('change', async function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try {
+      flash('Datei wird gelesen …', '');
+      var lines;
+      if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') lines = await pdfLines(f);
+      else lines = (await f.text()).split(/\r?\n/);
+      var res = importText(lines.join('\n'));
+      if (!res.names.length) {
+        showDropped(res.dropped);
+        flash('In der Datei wurden keine Namen gefunden. Bei gescannten PDFs die Namen bitte abtippen oder einfügen.', 'warn');
+        return;
+      }
+      namesEl.value = res.names.join('\n');
+      S.example = false;
+      applyImport(res);
+      refreshMap(); updateCount();
+      if (distribute(true)) flash(res.names.length + ' Namen geladen und verteilt' + (res.dups ? ', ' + res.dups + ' doppelte entfernt' : '') + '. Kurz prüfen, ob die Liste links stimmt.', 'ok');
+      else save();
+    } catch (err) {
+      flash('Die Datei konnte nicht gelesen werden. Die Namen lassen sich auch direkt in die Liste einfügen.', 'warn');
+    }
+    e.target.value = '';
+  });
+
+  namesEl.addEventListener('paste', function (e) {
+    var cd = e.clipboardData || window.clipboardData;
+    var txt = cd && cd.getData('text');
+    if (!txt || !/\n/.test(txt.trim())) return;
+    e.preventDefault();
+    var res = importText(txt);
+    if (S.example) { namesEl.value = ''; S.example = false; }
+    var ins = res.names.join('\n');
+    var s = namesEl.selectionStart, en = namesEl.selectionEnd;
+    if (s > 0 && namesEl.value.charAt(s - 1) !== '\n' && ins) ins = '\n' + ins;
+    namesEl.setRangeText(ins, s, en, 'end');
+    var extra = dedupeList();
+    res.dups += extra;
+    applyImport(res);
+    listChanged();
+    flash(res.names.length + ' Namen eingefügt' + (res.dups ? ', ' + res.dups + ' doppelte entfernt' : '') + (res.dropped.length ? ', ' + res.dropped.length + ' Zeilen übersprungen' : '') + '. Mit „Zufällig verteilen“ auf die Tische setzen.', 'ok');
+  });
+
+  function listChanged() { S.example = false; refreshMap(); paintAll(); updateCount(); save(); }
+  namesEl.addEventListener('input', listChanged);
+  $('clearList').addEventListener('click', function () {
+    namesEl.value = ''; showDropped([]); listChanged(); namesEl.focus();
+  });
+  $('shuffle').addEventListener('click', function () { distribute(false); });
+  $('arrange').addEventListener('click', arrange);
+  $('clearSeats').addEventListener('click', function () {
+    S.tables.forEach(function (t) { t.seats = [{ r: '', t: null }, { r: '', t: null }]; });
+    sel = null; render(); save();
+    flash('Alle Plätze sind leer. Namen direkt eintippen oder „Zufällig verteilen“.', 'ok');
+  });
+  $('title').addEventListener('input', function (e) { S.title = e.target.value; save(); });
+  $('snap').addEventListener('change', function (e) { S.snap = e.target.checked; save(); });
+  $('order').addEventListener('change', function (e) { S.order = e.target.value; refreshMap(); paintAll(); save(); });
+  $('fmt').addEventListener('change', function (e) { S.fmt = e.target.value; refreshMap(); paintAll(); save(); });
+  function gridChange() {
+    var c = Math.max(1, Math.min(8, parseInt($('cols').value, 10) || S.cols));
+    var r = Math.max(1, Math.min(8, parseInt($('rows').value, 10) || S.rows));
+    if (c === S.cols && r === S.rows) return;
+    S.cols = c; S.rows = r; S.home = null; S.tables = mkTables(c, r); sel = null; render();
+    if (listNames().length && distribute(true)) flash('Raster geändert, Plätze neu verteilt.', 'ok');
+    else save();
+  }
+  $('cols').addEventListener('change', gridChange);
+  $('rows').addEventListener('change', gridChange);
+
+  /* ---------- Tische vom Foto ---------- */
+  function shrinkImage(file) {
+    return new Promise(function (res, rej) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var k = Math.min(1, 1568 / Math.max(img.naturalWidth, img.naturalHeight));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { b ? res(b) : rej(new Error('bild')); }, 'image/jpeg', 0.85);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('bild')); };
+      img.src = url;
+    });
+  }
+  async function detectTables(blobs) {
+    var b64s = await Promise.all(blobs.map(function (blob) {
+      return new Promise(function (res) { var r = new FileReader(); r.onload = function () { res(String(r.result).split(',')[1]); }; r.readAsDataURL(blob); });
+    }));
+    if (window.claude) {
+      throw new Error('Die Fotoerkennung läuft auf sitzplan-zufallsgenerator.netlify.app.');
+    }
+    var resp;
+    try { resp = await fetch('/api/tische', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bilder: b64s }) }); }
+    catch (e) { throw new Error('Die Fotoerkennung ist gerade nicht erreichbar. Bitte Internetverbindung prüfen oder Tische über „Tische nebeneinander“ und „Tischreihen“ einstellen.'); }
+    if (resp.status === 404 || resp.status === 405) throw new Error('Die Fotoerkennung braucht einen KI-Dienst und ist in dieser Fassung nicht verfügbar. Tische bitte über „Tische nebeneinander“ und „Tischreihen“ einstellen und zurechtziehen.');
+    var data = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) throw new Error(data.fehler || 'Die Fotoerkennung hat nicht geantwortet.');
+    return data;
+  }
+  $('photo').addEventListener('change', async function (e) {
+    var files = Array.prototype.slice.call(e.target.files || [], 0, 3);
+    e.target.value = '';
+    if (!files.length) return;
+    var btn = $('photoBtn'); btn.textContent = 'Foto wird ausgewertet …';
+    flash((files.length > 1 ? files.length + ' Fotos werden' : 'Foto wird') + ' ausgewertet, das dauert etwa 20 bis 50 Sekunden …', '');
+    try {
+      var data = await detectTables(await Promise.all(files.map(shrinkImage)));
+      var list = data && Array.isArray(data.tische) ? data.tische : [];
+      var tabs = tablesFromPhoto(list);
+      if (!tabs) { flash('Auf dem Foto wurden keine Tische erkannt. Bitte ein Foto aufnehmen, auf dem alle Tische gut zu sehen sind.', 'warn'); return; }
+      S.tables = tabs; S.home = tabs.map(function (t) { return { x: t.x, y: t.y }; });
+      sel = null; render();
+      var ok = listNames().length ? distribute(true) : (save(), true);
+      var cap = S.tables.length * 2, n = listNames().length;
+      var msg = S.tables.length + ' Tische vom Foto übernommen (' + cap + ' Plätze)' + (n && ok ? ' und Namen verteilt' : '') + '. Abweichungen einfach zurechtziehen.';
+      if (n > cap) msg += ' Achtung: ' + n + ' Namen, aber nur ' + cap + ' Plätze.';
+      if (data.sitzordnung) msg += ' Erkannt: ' + data.sitzordnung + '.';
+      if (data.hinweis) msg += ' Hinweis: ' + data.hinweis;
+      flash(msg, n > cap ? 'warn' : 'ok');
+    } catch (err) {
+      flash((err && err.message) || 'Die Fotoerkennung hat nicht geklappt. Bitte noch einmal versuchen.', 'warn');
+    } finally {
+      btn.textContent = 'Tische vom Foto übernehmen';
+    }
+  });
+
+  /* ---------- Ausgeben ---------- */
+  function planText() {
+    var head = (S.title ? 'Sitzplan ' + S.title : 'Sitzplan') + ' · ' + TODAY + '\n\n';
+    return head + S.tables.map(function (t) {
+      return (disp(t.seats[0]) || '(frei)') + ' / ' + (disp(t.seats[1]) || '(frei)');
+    }).join('\n');
+  }
+  $('copyTxt').addEventListener('click', async function () {
+    var txt = planText();
+    try { await navigator.clipboard.writeText(txt); flash('Plan als Text kopiert.', 'ok'); }
+    catch (e) {
+      var ta = document.createElement('textarea'); ta.value = txt; ta.className = 'list'; ta.rows = 12;
+      msgEl.textContent = 'Kopieren wird hier nicht erlaubt. Der Text steht unten zum Markieren bereit.';
+      msgEl.appendChild(ta); ta.focus(); ta.select();
+    }
+  });
+
+  function rr(x, px, py, w, h, r) {
+    x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r);
+    x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath();
+  }
+  function wrap(x, text, maxW) {
+    var words = text.split(' '), lines = [], cur = '';
+    words.forEach(function (w) {
+      var t = cur ? cur + ' ' + w : w;
+      if (x.measureText(t).width <= maxW || !cur) cur = t; else { lines.push(cur); cur = w; }
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function fitText(x, text, maxW, boxH, maxFs, minFs) {
+    var fs, lines, lh;
+    for (fs = maxFs; fs >= minFs; fs--) {
+      x.font = '700 ' + fs + 'px "Schibsted Grotesk", system-ui, sans-serif';
+      lines = wrap(x, text, maxW); lh = Math.round(fs * 1.15);
+      if (lines.length * lh <= boxH && lines.every(function (l) { return x.measureText(l).width <= maxW; })) return { lines: lines, fs: fs, lh: lh };
+    }
+    return { lines: lines.slice(0, Math.max(1, Math.floor(boxH / lh))), fs: minFs, lh: lh };
+  }
+  /* Druckbild: Tische 1,6-fach, große fette Namen, Seitenverhältnis genau A4 */
+  async function drawPlan() {
+    try { await document.fonts.load('700 30px "Schibsted Grotesk"'); await document.fonts.load('500 20px "Schibsted Grotesk"'); } catch (e) {}
+    var T = S.tables, K = 1.6, DW = W * K, DH = H * K;
+    var minX = Math.min.apply(null, T.map(function (t) { return t.x; })), minY = Math.min.apply(null, T.map(function (t) { return t.y; }));
+    var maxX = Math.max.apply(null, T.map(function (t) { return t.x + tw(t); })), maxY = Math.max.apply(null, T.map(function (t) { return t.y + th(t); }));
+    var cw = (maxX - minX) * K, ch = (maxY - minY) * K;
+    var swP = (DW - 24) / 2, shP = DH - 20, ux = document.createElement('canvas').getContext('2d');
+    var all = []; T.forEach(function (t) { [0, 1].forEach(function (s) { var n = disp(t.seats[s]); if (n) all.push(n); }); });
+    var UF = 12, ULH = 14;
+    for (var fs = 30; fs >= 12; fs--) {
+      var lh0 = Math.round(fs * 1.15), maxL = Math.max(1, Math.floor((shP - 12) / lh0));
+      ux.font = '700 ' + fs + 'px "Schibsted Grotesk", system-ui, sans-serif';
+      var ok = all.every(function (n) { var ls = wrap(ux, n, swP - 14); return ls.length <= Math.min(2, maxL) && ls.every(function (l) { return ux.measureText(l).width <= swP - 14; }); });
+      if (ok) { UF = fs; ULH = lh0; break; }
+    }
+    var pad = 56, titleH = 76, gap = 40, boardH = 52, footH = 84;
+    var innerW = Math.max(cw, 560), innerH = titleH + ch + gap + boardH + footH;
+    var w = innerW + pad * 2, h = innerH + pad * 2;
+    var land = w >= h, ratio = land ? 297 / 210 : 210 / 297;
+    if (w / h < ratio) w = h * ratio; else h = w / ratio;
+    var ox = (w - innerW) / 2, oy = (h - innerH) / 2, cx = ox + (innerW - cw) / 2;
+    var sc = Math.min(4, (land ? 3508 : 2480) / w);
+    var c = document.createElement('canvas'); c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+    var x = c.getContext('2d'); x.scale(sc, sc);
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, w, h);
+    var F = function (wt, px) { return wt + ' ' + px + 'px "Schibsted Grotesk", system-ui, sans-serif'; };
+    x.fillStyle = '#111111'; x.textBaseline = 'alphabetic'; x.textAlign = 'left';
+    x.font = F(700, 38); x.fillText('Sitzplan' + (S.title ? ' ' + S.title : ''), ox, oy + 42);
+    x.textAlign = 'right'; x.font = F(500, 22); x.fillStyle = '#333333'; x.fillText(TODAY, ox + innerW, oy + 42);
+    T.forEach(function (t) {
+      var tx = cx + (t.x - minX) * K, ty = oy + titleH + (t.y - minY) * K;
+      var tW = tw(t) * K, tH = th(t) * K;
+      x.fillStyle = '#EFE5CF'; x.strokeStyle = '#7A6A47'; x.lineWidth = 2;
+      rr(x, tx + 1, ty + 1, tW - 2, tH - 2, 14); x.fill(); x.stroke();
+      var sw = swP, sh = t.v ? (tH - 28) / 2 : shP;
+      [0, 1].forEach(function (s) {
+        var sx = t.v ? tx + (tW - sw) / 2 : tx + 8 + s * (sw + 8), sy = t.v ? ty + 10 + s * (sh + 8) : ty + 10;
+        x.fillStyle = '#FFFFFF'; x.strokeStyle = '#B9A77F'; x.lineWidth = 1.2;
+        rr(x, sx, sy, sw, sh, 9); x.fill(); x.stroke();
+        var name = disp(t.seats[s]);
+        if (!name) return;
+        x.font = '700 ' + UF + 'px "Schibsted Grotesk", system-ui, sans-serif';
+        var f = { fs: UF, lh: ULH, lines: wrap(x, name, sw - 14) };
+        x.font = F(700, f.fs); x.fillStyle = '#111111'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        var top = sy + sh / 2 - ((f.lines.length - 1) * f.lh) / 2;
+        f.lines.forEach(function (l, k) { x.fillText(l, sx + sw / 2, top + k * f.lh); });
+      });
+    });
+    var by = oy + titleH + ch + gap;
+    x.fillStyle = '#27423A'; rr(x, ox, by, innerW, boardH, 8); x.fill();
+    x.fillStyle = '#FFFFFF'; x.font = F(700, 20); x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('T  A  F  E  L', w / 2, by + boardH / 2 + 1);
+    var fy = by + boardH + 58;
+    x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.fillStyle = '#111111'; x.font = F(500, 22);
+    x.fillText('Datum: ' + TODAY, ox, fy);
+    x.textAlign = 'right'; x.fillText('Paraphe:', ox + innerW - 236, fy);
+    x.strokeStyle = '#111111'; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(ox + innerW - 220, fy + 3); x.lineTo(ox + innerW, fy + 3); x.stroke();
+    return c;
+  }
+  /* In Claude über die Ansicht speichern, sonst normaler Browser-Download */
+  async function saveFile(filename, blob) {
+    if (dl) return dl.save({ filename: filename, data: blob });
+    if (window.claude) { var e = new Error('nodl'); throw e; }
+    var url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  async function makePdf() {
+    var c = await drawPlan();
+    var jsPDF = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDF) throw new Error('nopdf');
+    var land = c.width >= c.height;
+    var doc = new jsPDF({ orientation: land ? 'l' : 'p', unit: 'mm', format: 'a4' });
+    doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, land ? 297 : 210, land ? 210 : 297);
+    return doc;
+  }
+  function baseName() { return 'Sitzplan' + (S.title ? '-' + S.title.replace(/[^\wäöüÄÖÜß-]+/g, '_') : ''); }
+  function saveErr(err) {
+    var code = err && err.code;
+    if (code === 'declined') flash('Speichern abgebrochen.', '');
+    else flash('Speichern ist in dieser Ansicht nicht möglich. „Als Text kopieren“ funktioniert weiterhin.', 'warn');
+  }
+  $('savePng').addEventListener('click', async function () {
+    try {
+      var c = await drawPlan();
+      var blob = await new Promise(function (res) { c.toBlob(res, 'image/png'); });
+      await saveFile(baseName() + '.png', blob);
+      flash('Bild gespeichert.', 'ok');
+    } catch (err) { saveErr(err); }
+  });
+  $('savePdf').addEventListener('click', async function () {
+    try {
+      var doc = await makePdf();
+      await saveFile(baseName() + '.pdf', new Blob([doc.output('arraybuffer')], { type: 'application/pdf' }));
+      flash('PDF gespeichert.', 'ok');
+    } catch (err) { saveErr(err); }
+  });
+
+  var pageStyle = document.createElement('style'); document.head.appendChild(pageStyle);
+  $('printBtn').addEventListener('click', async function () {
+    try {
+      var c = await drawPlan(), land = c.width >= c.height;
+      var pa = $('printArea'); pa.innerHTML = '';
+      var img = new Image(); img.alt = 'Sitzplan'; img.src = c.toDataURL('image/png');
+      await new Promise(function (r) { img.onload = r; img.onerror = r; });
+      pa.appendChild(img);
+      pageStyle.textContent = '@page { size: A4 ' + (land ? 'landscape' : 'portrait') + '; margin: 6mm; }';
+      document.body.classList.add('printing');
+      document.body.classList.toggle('portrait', !land);
+      window.print();
+    } catch (err) { flash('Drucken hat nicht geklappt. „Als PDF“ speichern und die PDF ausdrucken.', 'warn'); }
+  });
+  window.addEventListener('afterprint', function () { document.body.classList.remove('printing', 'portrait'); });
+
+  /* ---------- Laden ---------- */
+  function okSeat(s) { return s && typeof s === 'object' && typeof s.r === 'string'; }
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && Array.isArray(o.tables) && o.cols >= 1 && o.rows >= 1 && (o.tables.length === o.cols * o.rows || (Array.isArray(o.home) && o.home.length === o.tables.length && o.tables.length > 0)) &&
+          o.tables.every(function (t) { return t && typeof t.x === 'number' && typeof t.y === 'number' && Array.isArray(t.seats) && t.seats.length === 2 && t.seats.every(okSeat); })) {
+          S = {
+            cols: o.cols, rows: o.rows, title: String(o.title || ''), snap: o.snap !== false, example: !!o.example,
+            order: o.order === 'first' ? 'first' : 'last', fmt: ['short', 'full', 'first'].indexOf(o.fmt) >= 0 ? o.fmt : 'short',
+            home: Array.isArray(o.home) ? o.home.map(function (h) { return { x: +h.x || 0, y: +h.y || 0 }; }) : null,
+            tables: o.tables.map(function (t) {
+              return { x: t.x, y: t.y, v: !!t.v, seats: t.seats.map(function (s) { return { r: s.r, t: typeof s.t === 'string' ? s.t : null }; }) };
+            })
+          };
+          namesEl.value = String(o.names || '');
+          return 'v3';
+        }
+      }
+      /* Ältere Fassung: Namen und Einstellungen übernehmen, Liste neu säubern, Tische neu stellen */
+      var old = localStorage.getItem(OLDKEY);
+      if (old) {
+        var p = JSON.parse(old);
+        if (p && !p.example && p.names) {
+          var res = importText(String(p.names));
+          if (res.names.length) {
+            S.cols = Math.max(1, Math.min(8, p.cols || 4)); S.rows = Math.max(1, Math.min(8, p.rows || 4));
+            S.title = String(p.title || ''); S.snap = p.snap !== false; S.example = false;
+            namesEl.value = res.names.join('\n');
+            return 'v2';
+          }
+        }
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  var how = load();
+  $('cols').value = S.cols; $('rows').value = S.rows; $('title').value = S.title; $('snap').checked = S.snap;
+  $('order').value = S.order; $('fmt').value = S.fmt;
+  if (how === 'v3') {
+    var dupsAtLoad = dedupeList();
+    render();
+    if (dupsAtLoad && distribute(true)) flash(dupsAtLoad + ' doppelte Namen aus der Liste entfernt und die Plätze neu verteilt.', 'ok');
+  } else {
+    S.tables = mkTables(S.cols, S.rows);
+    if (!how) namesEl.value = EXAMPLE.join('\n');
+    render();
+    distribute(true);
+    if (how === 'v2') flash('Deine Liste wurde neu gesäubert und verteilt.', 'ok');
+  }
+
+  /* Speichern-Funktion nur zeigen, wenn die Ansicht sie anbietet */
+  if (!window.claude) {
+    /* Eigenständige Fassung (z. B. auf Netlify): normaler Download und Druck */
+    $('savePdf').hidden = false; $('savePng').hidden = false; $('printBtn').hidden = false;
+  }
+  try {
+    if (window.claude && window.claude.use) {
+      window.claude.use('downloads').then(function (d) {
+        if (d) { dl = d; $('savePdf').hidden = false; $('savePng').hidden = false; }
+      }).catch(function () {});
+
+    }
+  } catch (e) {}
+})();
+</script>
+
+</body></html>
